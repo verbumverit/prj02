@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ITパスポート 練習アプリ（確認モード）</title>
+    <title>ITパスポート 練習アプリ（ナビ付）</title>
     <script src="question.js"></script>
     <style>
         :root {
@@ -15,35 +15,39 @@
         }
         body { font-family: sans-serif; background: var(--bg); color: var(--text); padding: 15px; transition: 0.3s; margin: 0; }
         .container { max-width: 600px; margin: 0 auto; background: var(--card); padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
-        .header { display: flex; justify-content: space-between; margin-bottom: 15px; }
+        .header { display: flex; justify-content: space-between; margin-bottom: 15px; gap: 5px; flex-wrap: wrap; }
         .btn-sm { font-size: 0.75em; padding: 5px 10px; cursor: pointer; border: 1px solid var(--border); background: var(--card); color: var(--text); border-radius: 5px; }
+        .btn-sm:disabled { opacity: 0.3; cursor: not-allowed; }
+        
         .progress-bar { height: 6px; background: var(--border); border-radius: 3px; margin-bottom: 15px; overflow: hidden; }
         #fill { height: 100%; background: var(--primary); width: 0%; transition: 0.4s; }
         .q-text { font-size: 1.1em; font-weight: bold; margin-bottom: 20px; line-height: 1.5; }
         
-        /* 選択肢のスタイル */
         .choice { 
             display: block; width: 100%; padding: 15px; margin: 10px 0; border: 2px solid var(--border);
             border-radius: 10px; background: var(--card); color: var(--text); text-align: left; cursor: pointer; font-size: 1em;
         }
-        /* 選択中の色 */
         .selected-choice { border-color: var(--primary); background: var(--selected); }
-        /* 回答表示後の色 */
         .correct { border-color: var(--success) !important; background: rgba(40,167,69,0.1) !important; font-weight: bold; }
         .wrong { border-color: var(--danger) !important; background: rgba(220,53,69,0.1) !important; }
 
         #action-area { margin-top: 20px; text-align: center; }
         .btn-action { width: 100%; padding: 15px; background: var(--primary); color: white; border: none; border-radius: 10px; font-weight: bold; font-size: 1.1em; cursor: pointer; }
-        .btn-action:disabled { background: #ccc; cursor: not-allowed; }
+        .btn-action:disabled { background: #ccc; }
         #result-label { font-weight: bold; margin-bottom: 10px; height: 1.5em; }
     </style>
 </head>
 <body>
 <div class="container">
     <div class="header">
-        <button class="btn-sm" onclick="toggleDark()">🌙 モード</button>
-        <button class="btn-sm" onclick="showStats()">📊 正答率</button>
-        <button class="btn-sm" onclick="reset()">🔄 リセット</button>
+        <div>
+            <button id="prev-btn" class="btn-sm" onclick="prevQ()">◀ 前へ</button>
+            <button class="btn-sm" onclick="toggleDark()">🌙 モード</button>
+        </div>
+        <div>
+            <button class="btn-sm" onclick="showStats()">📊 正答率</button>
+            <button class="btn-sm" onclick="reset()">🔄 リセット</button>
+        </div>
     </div>
     <div class="progress-bar"><div id="fill"></div></div>
     <div id="info" style="font-size: 0.8em; opacity: 0.7; margin-bottom: 5px;"></div>
@@ -60,8 +64,8 @@
     let idx = parseInt(localStorage.getItem('ip_idx')) || 0;
     let corrects = parseInt(localStorage.getItem('ip_cor')) || 0;
     let totals = parseInt(localStorage.getItem('ip_tot')) || 0;
-    let currentSelection = null; // 現在選んでいる記号
-    let isAnswerShown = false; // 回答を表示したかどうかのフラグ
+    let currentSelection = null;
+    let isAnswerShown = false;
 
     if (localStorage.getItem('ip_dark') === 'true') document.body.classList.add('dark-mode');
 
@@ -76,7 +80,7 @@
             return;
         }
         if (idx >= quizData.length) {
-            document.querySelector('.container').innerHTML = `<h2>完了！</h2><button class="btn-action" onclick="reset()">最初から解く</button>`;
+            document.querySelector('.container').innerHTML = `<h2>学習完了！</h2><button class="btn-action" onclick="reset()">最初から解く</button>`;
             return;
         }
 
@@ -89,6 +93,9 @@
         document.getElementById('fill').style.width = `${(idx / quizData.length) * 100}%`;
         document.getElementById('result-label').innerText = "";
         
+        // 前へボタンの有効化/無効化
+        document.getElementById('prev-btn').disabled = (idx === 0);
+
         const btn = document.getElementById('main-btn');
         btn.innerText = "回答を判定する";
         btn.disabled = true;
@@ -106,44 +113,35 @@
         });
     }
 
-    // 選択肢をタップした時の処理（まだ回答は表示しない）
     function selectChoice(k) {
         if (isAnswerShown) return;
         currentSelection = k;
-        
         ['ア','イ','ウ','エ'].forEach(key => {
             const b = document.getElementById('b'+key);
             if(b) b.classList.remove('selected-choice');
         });
         document.getElementById('b'+k).classList.add('selected-choice');
-        
         const mainBtn = document.getElementById('main-btn');
         mainBtn.disabled = false;
         mainBtn.innerText = "回答を判定する";
     }
 
-    // メインボタンが押された時の振り分け
     function handleButtonClick() {
-        if (!isAnswerShown) {
-            revealAnswer();
-        } else {
-            nextQ();
-        }
+        if (!isAnswerShown) revealAnswer();
+        else nextQ();
     }
 
-    // ソースの解答例[1][2]に基づいて判定を表示
     function revealAnswer() {
         const q = quizData[idx];
         const isCorrect = (currentSelection === q.正解);
-        
         isAnswerShown = true;
+        
+        // 初めて回答する場合のみ統計に加算
         totals++;
         if (isCorrect) corrects++;
-        
         localStorage.setItem('ip_cor', corrects);
         localStorage.setItem('ip_tot', totals);
 
-        // 色付け
         ['ア','イ','ウ','エ'].forEach(k => {
             const b = document.getElementById('b'+k);
             if(b) {
@@ -156,7 +154,6 @@
         const label = document.getElementById('result-label');
         label.innerText = isCorrect ? "○ 正解です！" : `× 不正解（正解：${q.正解}）`;
         label.style.color = isCorrect ? "var(--success)" : "var(--danger)";
-        
         document.getElementById('main-btn').innerText = "次へ進む";
     }
 
@@ -167,9 +164,19 @@
         window.scrollTo(0,0);
     }
 
+    // 前の問題に戻る機能を追加
+    function prevQ() {
+        if (idx > 0) {
+            idx--;
+            localStorage.setItem('ip_idx', idx);
+            init();
+            window.scrollTo(0,0);
+        }
+    }
+
     function showStats() {
         if(totals === 0) alert("回答データがありません。");
-        else alert(`正答率: ${((corrects/totals)*100).toFixed(1)}% (${totals}問中${corrects}正解)`);
+        else alert(`現在の正答率: ${((corrects/totals)*100).toFixed(1)}% (${totals}問中${corrects}正解)`);
     }
 
     function reset() {
