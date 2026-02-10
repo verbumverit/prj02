@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ITパスポート試験 100問完走モード</title>
+    <title>ITパスポート 公開問題演習（自動集計版）</title>
     <script src="question.js"></script>
     <style>
         :root {
@@ -20,13 +20,15 @@
             --tech-bg: #bf360c; --tech-txt: #ffe0b2;
         }
         body { font-family: sans-serif; background: var(--bg); color: var(--text); padding: 15px; transition: 0.3s; margin: 0; }
-        .container { max-width: 600px; margin: 0 auto; background: var(--card); padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .container { max-width: 600px; margin: 0 auto; background: var(--card); padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); min-height: 400px; }
         .header { display: flex; justify-content: space-between; margin-bottom: 15px; gap: 5px; flex-wrap: wrap; }
         .btn-sm { font-size: 0.75em; padding: 6px 12px; cursor: pointer; border: 1px solid var(--border); background: var(--card); color: var(--text); border-radius: 5px; }
+        .btn-sm:disabled { opacity: 0.2; cursor: not-allowed; }
 
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; overflow-y: auto; padding: 15px; box-sizing: border-box; }
         .modal-content { background: var(--card); margin: 0 auto; max-width: 550px; padding: 20px; border-radius: 15px; }
 
+        .list-btn { display: flex; align-items: center; padding: 12px; border: 1px solid var(--border); background: var(--card); color: var(--text); border-radius: 8px; cursor: pointer; gap: 10px; width: 100%; margin-bottom: 8px; text-align: left; }
         .list-cat { font-size: 0.7em; width: 80px; flex-shrink: 0; padding: 3px 0; border-radius: 4px; text-align: center; font-weight: bold; }
         .cat-strat { background: var(--strat-bg); color: var(--strat-txt); }
         .cat-mgmt { background: var(--mgmt-bg); color: var(--mgmt-txt); }
@@ -52,28 +54,24 @@
 </head>
 <body>
 
-<!-- 一覧モーダル -->
 <div id="list-modal" class="modal" onclick="if(event.target === this) toggleModal('list-modal')">
     <div class="modal-content">
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
             <h3 style="margin:0;">問題一覧</h3>
             <button class="btn-sm" onclick="toggleModal('list-modal')">✕ 閉じる</button>
         </div>
-        <div id="q-list" style="margin-top:15px; display:flex; flex-direction:column; gap:8px;"></div>
+        <div id="q-list" style="margin-top:15px;"></div>
     </div>
 </div>
 
-<!-- 統計モーダル -->
 <div id="stats-modal" class="modal" onclick="if(event.target === this) toggleModal('stats-modal')">
     <div class="modal-content">
         <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom:20px;">
-            <h3 style="margin:0;">📊 全100問 到達度分析</h3>
+            <h3 style="margin:0;">📊 試験結果分析</h3>
             <button class="btn-sm" onclick="toggleModal('stats-modal')">✕ 閉じる</button>
         </div>
         <div id="stats-body"></div>
-        <p style="font-size:0.75em; color:#888; text-align:center; margin-top:20px;">
-            未回答の問題は0点として計算しています。
-        </p>
+        <button class="btn-action" style="margin-top:20px;" onclick="reset()">記録をリセットして最初から</button>
     </div>
 </div>
 
@@ -91,8 +89,10 @@
     </div>
     <div class="progress-bar"><div id="fill"></div></div>
     <div id="info" style="font-size: 0.85em; opacity: 0.7; margin-bottom: 5px;"></div>
-    <div class="q-text" id="question"></div>
-    <div id="choices"></div>
+    <div id="main-content">
+        <div class="q-text" id="question"></div>
+        <div id="choices"></div>
+    </div>
     <div id="action-area">
         <div id="result-label"></div>
         <button id="main-btn" class="btn-action" onclick="handleButtonClick()" disabled>選択してください</button>
@@ -101,11 +101,8 @@
 
 <script>
     let idx = parseInt(localStorage.getItem('ip_idx')) || 0;
-    // 正解した問題番号を記録する
     let correctList = JSON.parse(localStorage.getItem('ip_correct_list')) || [];
-    // 回答済みの問題番号を記録する
     let answeredList = JSON.parse(localStorage.getItem('ip_answered_list')) || [];
-
     let currentSelection = null;
     let isAnswerShown = false;
 
@@ -128,10 +125,8 @@
         quizData.forEach((q, i) => {
             const btn = document.createElement('button');
             btn.className = 'list-btn';
-            btn.style = "display:flex; align-items:center; padding:12px; border:1px solid var(--border); background:var(--card); color:var(--text); border-radius:8px; cursor:pointer; gap:10px;";
             const preview = q.問題文.replace(/<br>/g, ' ').substring(0, 20) + '...';
             let catClass = q.カテゴリ === "マネジメント系" ? 'cat-mgmt' : (q.カテゴリ === "テクノロジ系" ? 'cat-tech' : 'cat-strat');
-            // 回答済みマーク
             const mark = answeredList.includes(q.問番号) ? (correctList.includes(q.問番号) ? "✅" : "❌") : "　";
             btn.innerHTML = `<div style="width:20px">${mark}</div><div class="list-num">問${q.問番号}</div><div class="list-cat ${catClass}">${q.カテゴリ.replace('系','')}</div><div class="list-snippet">${preview}</div>`;
             btn.onclick = () => { idx = i; localStorage.setItem('ip_idx', idx); toggleModal('list-modal'); init(); window.scrollTo(0,0); };
@@ -141,61 +136,63 @@
 
     function updateStatsModal() {
         const body = document.getElementById('stats-body');
-        // 各カテゴリの問番号範囲 [2-4]
         const categories = [
-            { id: 'strat', name: "ストラテジ系", range: [5, 6], max: 35, color: "var(--strat-txt)" },
-            { id: 'mgmt', name: "マネジメント系", range: [7, 8], max: 20, color: "var(--mgmt-txt)" },
-            { id: 'tech', name: "テクノロジ系", range: [9], max: 45, color: "var(--tech-txt)" }
+            { id: 'strat', name: "ストラテジ系", range:, max: 35, color: "var(--strat-txt)" },
+            { id: 'mgmt', name: "マネジメント系", range:, max: 20, color: "var(--mgmt-txt)" },
+            { id: 'tech', name: "テクノロジ系", range:, max: 45, color: "var(--tech-txt)" }
         ];
-        
         body.innerHTML = '';
-        let totalCorrect = correctList.length;
-        
         categories.forEach(c => {
-            // カテゴリ範囲内の正解数をカウント
-            let catCorrect = correctList.filter(n => n >= c.range && n <= c.range[5]).length;
+            let catCorrect = correctList.filter(n => n >= c.range && n <= c.range).length;
             let rate = ((catCorrect / c.max) * 100).toFixed(1);
-            
-            body.innerHTML += `
-                <div class="stat-item">
-                    <div class="stat-label">
-                        <span>${c.name} (全${c.max}問)</span>
-                        <span>${catCorrect}点 / ${rate}%</span>
-                    </div>
-                    <div class="stat-bar-container">
-                        <div class="target-line" style="left:30%"></div>
-                        <div class="stat-bar-fill" style="width:${rate}%; background:${c.color}"></div>
-                    </div>
-                </div>`;
+            body.innerHTML += `<div class="stat-item"><div class="stat-label"><span>${c.name}</span><span>${catCorrect}/${c.max}点</span></div><div class="stat-bar-container"><div class="target-line" style="left:30%"></div><div class="stat-bar-fill" style="width:${rate}%; background:${c.color}"></div></div></div>`;
         });
-
-        const totalRate = ((totalCorrect / 100) * 100).toFixed(1);
-        body.innerHTML += `
-            <div style="margin-top:30px; padding:15px; background:rgba(0,123,255,0.1); border-radius:10px; text-align:center;">
-                <div style="font-weight:bold; margin-bottom:10px;">現在の総合得点 (100点満点)</div>
-                <div style="font-size:2.5em; font-weight:bold; color:var(--primary);">${totalCorrect}点</div>
-                <div style="font-size:0.9em; opacity:0.8;">総合正答率: ${totalRate}%</div>
-            </div>`;
+        const total = correctList.length;
+        body.innerHTML += `<div style="margin-top:20px; padding:15px; background:rgba(0,123,255,0.1); border-radius:10px; text-align:center;"><div style="font-weight:bold;">総合得点 (100点満点)</div><div style="font-size:2.5em; font-weight:bold; color:var(--primary);">${total}点</div></div>`;
         
-        toggleModal('stats-modal');
+        // モーダルを表示（既に開いている場合は何もしない）
+        document.getElementById('stats-modal').style.display = 'block';
     }
 
     function init() {
-        if (typeof quizData === 'undefined') { document.getElementById('question').innerText = "question.jsが見つかりません。"; return; }
-        if (idx >= quizData.length) { document.querySelector('.container').innerHTML = `<h2>全問題 終了！</h2><p>お疲れ様でした。正答率ボタンから最終スコアを確認してください。</p><button class="btn-action" onclick="reset()">記録をリセットして最初から</button>`; return; }
+        if (typeof quizData === 'undefined') return;
         
-        isAnswerShown = false; currentSelection = null;
-        const q = quizData[idx];
-        document.getElementById('info').innerText = `問 ${q.問番号} / 100 [${q.カテゴリ}]`;
-        document.getElementById('question').innerHTML = q.問題文;
-        document.getElementById('fill').style.width = `${(idx / 100) * 100}%`;
-        document.getElementById('result-label').innerText = "";
-        document.getElementById('main-btn').innerText = "回答を判定する";
-        document.getElementById('main-btn').disabled = true;
-        document.getElementById('prev-btn').disabled = (idx === 0);
+        const mainBtn = document.getElementById('main-btn');
+        const info = document.getElementById('info');
+        const question = document.getElementById('question');
+        const choices = document.getElementById('choices');
+        const resultLabel = document.getElementById('result-label');
+        const prevBtn = document.getElementById('prev-btn');
 
-        const area = document.getElementById('choices');
-        area.innerHTML = '';
+        resultLabel.innerText = "";
+        isAnswerShown = false;
+        currentSelection = null;
+        prevBtn.disabled = (idx === 0);
+
+        // 全問終了時の自動処理
+        if (idx >= quizData.length) {
+            info.innerText = "演習 修了";
+            document.getElementById('fill').style.width = "100%";
+            question.innerHTML = "<h2>全ての回答が終了しました</h2><p>分析結果を自動で表示しています。未到達の分野がないか確認しましょう。</p><p>「前へ」ボタンや「一覧」から復習も可能です。</p>";
+            choices.innerHTML = "";
+            mainBtn.innerText = "分析結果を再表示";
+            mainBtn.disabled = false;
+            mainBtn.onclick = updateStatsModal;
+            
+            // 【重要】修了時に自動で統計を表示
+            updateStatsModal();
+            return;
+        }
+
+        const q = quizData[idx];
+        info.innerText = `問 ${q.問番号} / 100 [${q.カテゴリ}]`;
+        question.innerHTML = q.問題文;
+        document.getElementById('fill').style.width = `${(idx / 100) * 100}%`;
+        mainBtn.innerText = "回答を判定する";
+        mainBtn.disabled = true;
+        mainBtn.onclick = handleButtonClick;
+
+        choices.innerHTML = '';
         ['ア','イ','ウ','エ'].forEach(k => {
             if(q.選択肢[k]) {
                 const b = document.createElement('button');
@@ -206,9 +203,9 @@
                     currentSelection = k;
                     ['ア','イ','ウ','エ'].forEach(key => document.getElementById('b'+key)?.classList.remove('selected-choice'));
                     b.classList.add('selected-choice');
-                    document.getElementById('main-btn').disabled = false;
+                    mainBtn.disabled = false;
                 };
-                area.appendChild(b);
+                choices.appendChild(b);
             }
         });
     }
@@ -218,15 +215,12 @@
             const q = quizData[idx];
             const isCorrect = (currentSelection === q.正解);
             isAnswerShown = true;
-            
-            // 回答記録 (重複なし)
             if (!answeredList.includes(q.問番号)) {
                 answeredList.push(q.問番号);
                 if (isCorrect) correctList.push(q.問番号);
                 localStorage.setItem('ip_answered_list', JSON.stringify(answeredList));
                 localStorage.setItem('ip_correct_list', JSON.stringify(correctList));
             }
-
             ['ア','イ','ウ','エ'].forEach(k => {
                 const b = document.getElementById('b'+k);
                 if(b) {
