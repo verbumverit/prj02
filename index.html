@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ITパスポート試験 公開問題演習</title>
+    <title>ITパスポート 公開問題演習（データ連携版）</title>
     <script src="question.js"></script>
     <style>
         :root {
@@ -22,7 +22,7 @@
         body { font-family: sans-serif; background: var(--bg); color: var(--text); padding: 15px; transition: 0.3s; margin: 0; }
         .container { max-width: 600px; margin: 0 auto; background: var(--card); padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); min-height: 400px; }
         .header { display: flex; justify-content: space-between; margin-bottom: 15px; gap: 5px; flex-wrap: wrap; }
-        .btn-sm { font-size: 0.75em; padding: 6px 12px; cursor: pointer; border: 1px solid var(--border); background: var(--card); color: var(--text); border-radius: 5px; }
+        .btn-sm { font-size: 0.75em; padding: 6px 10px; cursor: pointer; border: 1px solid var(--border); background: var(--card); color: var(--text); border-radius: 5px; }
         .btn-sm:disabled { opacity: 0.2; cursor: not-allowed; }
 
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; overflow-y: auto; padding: 15px; box-sizing: border-box; }
@@ -71,20 +71,22 @@
             <button class="btn-sm" onclick="toggleModal('stats-modal')">✕ 閉じる</button>
         </div>
         <div id="stats-body"></div>
-        <button class="btn-action" style="margin-top:20px;" onclick="reset()">記録をリセットして最初から</button>
+        <button class="btn-action" style="margin-top:20px;" onclick="reset()">リセット</button>
     </div>
 </div>
 
 <div class="container">
     <div class="header">
         <div>
-            <button id="prev-btn" class="btn-sm" onclick="prevQ()">◀ 前へ</button>
+            <button id="prev-btn" class="btn-sm" onclick="prevQ()">◀</button>
             <button class="btn-sm" onclick="toggleModal('list-modal')">📋 一覧</button>
-            <button class="btn-sm" onclick="toggleDark()">🌙 モード</button>
+            <button class="btn-sm" onclick="exportData()">💾 保存</button>
+            <button class="btn-sm" onclick="document.getElementById('file-input').click()">📂 読込</button>
+            <input type="file" id="file-input" style="display:none" onchange="importData(this)" accept=".json">
         </div>
         <div>
             <button class="btn-sm" onclick="updateStatsModal()">📊 正答率</button>
-            <button class="btn-sm" onclick="reset()">🔄 リセット</button>
+            <button class="btn-sm" onclick="toggleDark()">🌙</button>
         </div>
     </div>
     <div class="progress-bar"><div id="fill"></div></div>
@@ -111,6 +113,45 @@
     function toggleDark() {
         const isDark = document.body.classList.toggle('dark-mode');
         localStorage.setItem('ip_dark', isDark);
+    }
+
+    // エクスポート機能
+    function exportData() {
+        const data = {
+            idx: idx,
+            correctList: correctList,
+            answeredList: answeredList,
+            date: new Date().toISOString()
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `it_pass_status_${new Date().toLocaleDateString()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    // インポート機能
+    function importData(input) {
+        const file = input.files;
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+                if (confirm("回答状況を上書きしますか？")) {
+                    idx = data.idx || 0;
+                    correctList = data.correctList || [];
+                    answeredList = data.answeredList || [];
+                    localStorage.setItem('ip_idx', idx);
+                    localStorage.setItem('ip_correct_list', JSON.stringify(correctList));
+                    localStorage.setItem('ip_answered_list', JSON.stringify(answeredList));
+                    location.reload();
+                }
+            } catch (err) { alert("無効なファイル形式です。"); }
+        };
+        reader.readAsText(file);
     }
 
     function toggleModal(id) {
@@ -143,20 +184,17 @@
         ];
         body.innerHTML = '';
         categories.forEach(c => {
-            // カテゴリ範囲内の正解数を正しくフィルタリング
             let catCorrect = correctList.filter(n => n >= c.start && n <= c.end).length;
             let rate = ((catCorrect / c.max) * 100).toFixed(1);
             body.innerHTML += `<div class="stat-item"><div class="stat-label"><span>${c.name}</span><span>${catCorrect}/${c.max}点</span></div><div class="stat-bar-container"><div class="target-line" style="left:30%"></div><div class="stat-bar-fill" style="width:${rate}%; background:${c.color}"></div></div></div>`;
         });
         const total = correctList.length;
         body.innerHTML += `<div style="margin-top:20px; padding:15px; background:rgba(0,123,255,0.1); border-radius:10px; text-align:center;"><div style="font-weight:bold;">総合得点 (100点満点)</div><div style="font-size:2.5em; font-weight:bold; color:var(--primary);">${total}点</div></div>`;
-        
         document.getElementById('stats-modal').style.display = 'block';
     }
 
     function init() {
-        if (typeof quizData === 'undefined' || quizData.length === 0) return;
-        
+        if (typeof quizData === 'undefined') return;
         const mainBtn = document.getElementById('main-btn');
         const info = document.getElementById('info');
         const question = document.getElementById('question');
@@ -164,17 +202,15 @@
         const resultLabel = document.getElementById('result-label');
         const prevBtn = document.getElementById('prev-btn');
 
-        resultLabel.innerText = "";
-        isAnswerShown = false;
-        currentSelection = null;
+        resultLabel.innerText = ""; isAnswerShown = false; currentSelection = null;
         prevBtn.disabled = (idx === 0);
 
         if (idx >= quizData.length) {
             info.innerText = "演習 修了";
             document.getElementById('fill').style.width = "100%";
-            question.innerHTML = "<h2>全ての回答が終了しました</h2><p>分析結果を自動で表示しています。</p><p>「前へ」ボタンや「一覧」から復習も可能です。</p>";
+            question.innerHTML = "<h2>演習終了です</h2><p>保存ボタンで結果をファイルに残せます。</p>";
             choices.innerHTML = "";
-            mainBtn.innerText = "分析結果を再表示";
+            mainBtn.innerText = "結果を表示";
             mainBtn.disabled = false;
             mainBtn.onclick = updateStatsModal;
             updateStatsModal();
@@ -185,9 +221,7 @@
         info.innerText = `問 ${q.問番号} / 100 [${q.カテゴリ}]`;
         question.innerHTML = q.問題文;
         document.getElementById('fill').style.width = `${(idx / 100) * 100}%`;
-        mainBtn.innerText = "回答を判定する";
-        mainBtn.disabled = true;
-        mainBtn.onclick = handleButtonClick;
+        mainBtn.innerText = "回答を判定する"; mainBtn.disabled = true; mainBtn.onclick = handleButtonClick;
 
         choices.innerHTML = '';
         ['ア','イ','ウ','エ'].forEach(k => {
@@ -236,7 +270,7 @@
     }
 
     function prevQ() { if(idx > 0) { idx--; localStorage.setItem('ip_idx', idx); init(); window.scrollTo(0,0); } }
-    function reset() { if(confirm("進行度とスコアをリセットしますか？")) { localStorage.clear(); location.reload(); } }
+    function reset() { if(confirm("リセットしますか？")) { localStorage.clear(); location.reload(); } }
     window.onload = init;
 </script>
 </body>
