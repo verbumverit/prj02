@@ -141,18 +141,26 @@
             background-color: var(--text-color);
             color: var(--bg-color);
         }
+        .clock-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transform-origin: center center;
+        }
     </style>
 </head>
 <body>
     <button class="theme-toggle" id="theme-toggle">🎨</button>
-    <div class="clock">
-        <div id="date-window"></div>
-        <div class="hand hour" id="hour"></div>
-        <div class="hand minute" id="minute"></div>
-        <div class="hand second" id="second"></div>
-        <div class="center-dot"></div>
+    <div class="clock-container">
+        <div class="clock">
+            <div id="date-window"></div>
+            <div class="hand hour" id="hour"></div>
+            <div class="hand minute" id="minute"></div>
+            <div class="hand second" id="second"></div>
+            <div class="center-dot"></div>
+        </div>
+        <div id="digital-clock"></div>
     </div>
-    <div id="digital-clock"></div>
 
     <script>
         const clock = document.querySelector('.clock');
@@ -218,6 +226,17 @@
         themeToggle.addEventListener('click', () => {
             document.body.classList.toggle('light-theme');
         });
+
+        function resizeClock() {
+            const container = document.querySelector('.clock-container');
+            const clockBaseSize = 300; // 時計の基本サイズ(px)
+            // 画面の短辺（幅か高さの小さい方）の85%の大きさになるようにスケール値を計算
+            const scale = (Math.min(window.innerWidth, window.innerHeight) * 0.85) / clockBaseSize;
+            container.style.transform = `scale(${scale})`;
+        }
+
+        window.addEventListener('resize', resizeClock);
+        resizeClock();
 
         requestAnimationFrame(updateClock);
     </script>
