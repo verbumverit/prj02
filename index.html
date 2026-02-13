@@ -79,8 +79,8 @@
             const hourDegrees = ((hours / 12) * 360) + ((minutes/60)*30);
 
             document.getElementById('second').style.transform = `rotate(${secondDegrees}deg)`;
-            document.getElementById('minute').style.transform = `rotate(deg)`;
-            document.getElementById('hour').style.transform = `rotate(deg)`;
+            document.getElementById('minute').style.transform = `rotate(${minuteDegrees}deg)`;
+            document.getElementById('hour').style.transform = `rotate(${hourDegrees}deg)`;
         }
 
         setInterval(updateClock, 1000);
